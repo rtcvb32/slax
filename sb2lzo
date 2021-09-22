@@ -1,0 +1,25 @@
+#!/bin/bash
+
+#Author: Era Scarecrow <rtcvb32@yahoo.com>
+#License: GPL 2
+#Date: 22 Sep 2021
+#Description: Convert Slax bundles to LZO
+#
+#Convert Slax's default XZ to LZO. This is a standalone script for any bundles, not the core.
+#Recommended you do this in /tmp. Assumes Slax tools sb2dir/rmsbdir
+
+for X;
+do
+	printf "Repacking: $X\t %s" `du -h "$DIR/slax/$X" | sed -E -e 's/[^a-zA-Z0-9].*//'` " -\> "
+	
+	mkdir /tmp/repack.sb
+	
+	sb2dir "$X" /tmp/repack.sb
+
+	#Ripped from 01-core.sb
+	mksquashfs /tmp/repack.sb "$X.sqfs" -comp lzo -b 1024K -always-use-fragments >/dev/null
+	rmsbdir /tmp/repack.sb
+
+	mv "$X.sqfs" "$X"
+	du -h "$X" | sed -E -e 's/[^a-zA-Z0-9].*//'
+done

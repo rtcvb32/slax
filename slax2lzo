@@ -1,0 +1,87 @@
+#!/bin/bash
+
+#Author: Era Scarecrow <rtcvb32@yahoo.com>
+#License: GPL 2
+#Date: 22 Sep 2021
+#Description: Convert Slax bundles to LZO
+#
+#By default the savechanges and dir2sb files use xz compression, while good for size is terrible for older computers laptops, chromebooks, VM's and the like
+#LZO will make it nearly lightning fast. Just specify the mounted directory, which may be /media/sda1 or another folder
+
+if [ ! -e "$1" ]; then
+	echo "Add directory of package bundles to be recompressed: ex /media/sda1"
+	exit
+fi
+
+mkdir /tmp/sb
+cd /tmp/sb
+
+#remove trailing slash if there.
+DIR=`echo "$1" | sed -E -e 's:/$::'`
+
+#make lzo versions which are immediately avaliable for later
+for X in dir2sb savechanges;
+do
+	sed -E -e 's/\bxz\b/lzo/g' "/usr/bin/${X}" > "/usr/bin/${X}_lzo"
+	chmod 755 "/usr/bin/${X}_lzo"
+done
+
+#firmware absent because we only use it like once...
+for X in 01-core.sb 02-xorg.sb 03-desktop.sb 04-apps.sb 05-chromium.sb;
+do
+	if [ -f "$DIR/slax/$X" ]; then 
+		echo "Extracting: $X"
+		mkdir "/tmp/sb/$X"
+		sb2dir "$DIR/slax/$X" "/tmp/sb/$X"
+	fi
+done
+
+echo
+
+#add lzo scripts for future use
+if [ -d "01-core.sb" ]; then
+	echo "adding lzo files"
+	cp /usr/bin/*_lzo /tmp/sb/01-core.sb/usr/bin
+fi
+
+#add tap-to-click, delete this file if you don't want it.
+if [ -d "03-desktop.sb" ]; then
+	echo "adding 40-libinput.conf"
+	mkdir -p /tmp/sb/03-desktop.sb/etc/X11/xorg.conf.d
+		echo 'Section "InputClass"
+        Identifier "libinput touchpad catchall"
+        MatchIsTouchpad "on"
+        MatchDevicePath "/dev/input/event*"
+        Driver "libinput"
+        Option "Tapping" "on"
+EndSection' > /tmp/sb/03-desktop.sb/etc/X11/xorg.conf.d/40-libinput.conf
+fi
+
+#save bundles, should still be in /tmp/sb
+for X in *.sb;
+do
+	printf "Packing: $X\t %s" `du -h "$DIR/slax/$X" | sed -E -e 's/[^a-zA-Z0-9].*//'` " -\> "
+	dir2sb_lzo "$X"
+	du -h "$X" | sed -E -e 's/[^a-zA-Z0-9].*//'
+done
+
+echo
+echo "Copying bundles back to device"
+#copy packages, then move them. This way in case there's an error you could do it manually after the fact.
+cp *.sb "$DIR"
+sync
+cd "$DIR"
+mv *.sb slax
+sync
+echo "Moving and rebooting"
+for X in ... .. .;
+do
+	echo "$X"
+	sleep 1
+done
+
+#We don't bother with cleanup as it should be thrown away anyways.
+
+#reboot, if done right the live files are LZO now
+
+shutdown -r now
