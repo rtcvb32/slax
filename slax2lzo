@@ -13,6 +13,21 @@ if [ ! -e "$1" ]; then
 	exit
 fi
 
+if [ ! "`whoami`" = 'root' ]; then
+	echo "Requires root..."
+	su
+	if [ ! "`whoami`" = 'root' ]; then
+		echo "Not root, probably wouldn't work"
+		exit 1
+	fi
+fi
+
+if [ ! \( -f /usr/bin/sb2dir -a -f /usr/bin/dir2sb -a -f /usr/bin/savechanges \) ]; then
+	echo "Error: Utilities sb2dir, dir2sb, savechanges; Are missing, probably not Slax Distro."
+	echo "\tuse sb2lzo instead"
+	exit 1
+fi
+
 mkdir /tmp/sb
 cd /tmp/sb
 
@@ -57,12 +72,14 @@ if [ -d "03-desktop.sb" ]; then
 EndSection' > /tmp/sb/03-desktop.sb/etc/X11/xorg.conf.d/40-libinput.conf
 fi
 
+echo
+
 #save bundles, should still be in /tmp/sb
 for X in *.sb;
 do
-	printf "Packing: $X\t %s" `du -h "$DIR/slax/$X" | sed -E -e 's/[^a-zA-Z0-9].*//'` " -\> "
+	printf "Repacking: %s" "$X"
 	dir2sb_lzo "$X"
-	du -h "$X" | sed -E -e 's/[^a-zA-Z0-9].*//'
+	printf "\t%s  ->  %s\n"  `du -h "$DIR/slax/$X" | sed -E -e 's/[^a-zA-Z0-9].*//'`  `du -h "$X" | sed -E -e 's/[^a-zA-Z0-9].*//'`
 done
 
 echo
@@ -73,6 +90,7 @@ sync
 cd "$DIR"
 mv *.sb slax
 sync
+
 echo "Moving and rebooting"
 for X in ... .. .;
 do
@@ -81,7 +99,7 @@ do
 done
 
 #We don't bother with cleanup as it should be thrown away anyways.
+#rm -fr /tmp/sb
 
 #reboot, if done right the live files are LZO now
-
 shutdown -r now
