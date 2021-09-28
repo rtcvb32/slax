@@ -6,8 +6,7 @@
 #Description: Convert Slax bundles to LZO
 #
 #Convert Slax's default XZ to LZO. This is a standalone script for any bundles, not the core.
-#Recommended you do this in /tmp. Assumes Slax tools sb2dir/rmsbdir; If slax scripts don't
-#exist another method is used for the same effect
+#Recommended you do this in /tmp.
 
 #root required in MOST cases, as we will likely make root or other users
 #In workaround root rquired to mount
@@ -20,27 +19,22 @@ if [ ! "`whoami`" = 'root' ]; then
 	fi
 fi
 
+#Create mount point
+mkdir /tmp/repack.sb
+
 for X;
 do
-	mkdir /tmp/repack.sb
 	
-	if [ -f /usr/bin/sb2dir -a -f /usr/bin/rmsbdir ]; then
-		sb2dir "$X" /tmp/repack.sb
-	else
-		mount "$X" /tmp/repack.sb -t squashfs -o loopback
-	fi
+	mount "$X" /tmp/repack.sb -t squashfs -o loopback
 
 	printf "Repacking: %s" "$X"
 	mksquashfs /tmp/repack.sb "$X.sqfs" -comp lzo -b 1024K -always-use-fragments >/dev/null
 	printf "\t%s  ->  %s\n"  `du -h "$X" | sed -E -e 's/[^a-zA-Z0-9].*//'`  `du -h "$X.sqfs" | sed -E -e 's/[^a-zA-Z0-9].*//'`
 
-	if [ -f /usr/bin/sb2dir -a -f /usr/bin/rmsbdir ]; then
-		rmsbdir /tmp/repack.sb
-	else
-		umount /tmp/repack.sb
-		rm -fr /tmp/repack.sb
-	fi
-
+	umount /tmp/repack.sb
 	mv "$X.sqfs" "$X"
 	sync
 done
+
+#Cleanup mount point
+rm -fr /tmp/repack.sb
