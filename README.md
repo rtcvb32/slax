@@ -17,12 +17,12 @@ apt update; apt-get install curl
 
 Getting and activating script:
 
-cd /tmp; curl https://raw.githubusercontent.com/rtcvb32/slax/main/slax2lzo -o slax2lzo; chmod +x slax2lzo
+cd /tmp; curl https://raw.githubusercontent.com/rtcvb32/slax/main/slax2lzo | sed -e 's/\r//g' > slax2lzo; chmod +x slax2lzo
 
 ./slax2lzo [ DIRECTORY LOCATION, like /media/sda1 ]
  
- If all goes well it should extract all the sb's that are important, repack them, add the lzo files and the touchpad file, and then write it back to where it got it all at and immediately restart the system. Just to be sure, run in 'Fresh Start' to make sure unneeded changes are gone.
+ If all goes well it should repack all mounted bundles, add the lzo files and the touchpad file in 01-lzo.sb, and then write it back to where it got it all at and immediately restart the system. Just to be sure, run in 'Fresh Start' to make sure unneeded changes are gone.
  
  new script files should include savechanges_lzo dir2sb_lzo
  
- In the event you want to process sb files without adding anything new, sb2lzo is the script for you. Using slax scripts it will extract and then repack sb files.
+ In the event you want to process sb files without adding anything new, sb2lzo is the script for you. Using slax scripts it will mount and repack sb files replacing the original.
