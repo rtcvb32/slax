@@ -22,73 +22,67 @@ if [ ! "`whoami`" = 'root' ]; then
 	fi
 fi
 
-if [ ! \( -f /usr/bin/sb2dir -a -f /usr/bin/dir2sb -a -f /usr/bin/savechanges \) ]; then
+if [ ! \( -f /usr/bin/sb2dir -a -f /usr/bin/dir2sb -a -f /usr/bin/savechanges -a -d /run/initramfs/memory/bundles \) ]; then
 	echo "Error: Utilities sb2dir, dir2sb, savechanges; Are missing, probably not Slax Distro."
 	echo "\tuse sb2lzo instead"
 	exit 1
 fi
 
-mkdir /tmp/sb
-cd /tmp/sb
-
 #remove trailing slash if there.
 DIR=`echo "$1" | sed -E -e 's:/$::'`
 
-#make lzo versions which are immediately avaliable for later
-for X in dir2sb savechanges;
-do
-	sed -E -e 's/\bxz\b/lzo/g' "/usr/bin/${X}" > "/usr/bin/${X}_lzo"
-	chmod 755 "/usr/bin/${X}_lzo"
-done
+if [ ! -f "$DIR/01-lzo.sb" ]; then
+	echo "Creating lzo versions & tap-to-touch bundle"
 
-#firmware absent because we only use it like once...
-for X in 01-core.sb 02-xorg.sb 03-desktop.sb 04-apps.sb 05-chromium.sb;
-do
-	if [ -f "$DIR/slax/$X" ]; then 
-		echo "Extracting: $X"
-		mkdir "/tmp/sb/$X"
-		sb2dir "$DIR/slax/$X" "/tmp/sb/$X"
-	fi
-done
+	#make dirs used or not and populate
+	mkdir -p /tmp/sb/usr/bin
+	mkdir -p /tmp/sb/etc/X11/xorg.conf.d
 
-echo
+	#make lzo versions, just replace xz with lzo in scripts
+	for X in dir2sb savechanges;
+	do
+		sed -E -e 's/\bxz\b/lzo/g' "/usr/bin/${X}" > "/tmp/sb/usr/bin/${X}_lzo"
+		chmod 755 /tmp/sb/usr/bin/*
+	done
 
-#add lzo scripts for future use
-if [ -d "01-core.sb" ]; then
-	echo "adding lzo files"
-	cp /usr/bin/*_lzo /tmp/sb/01-core.sb/usr/bin
-fi
-
-#add tap-to-click, delete this file if you don't want it.
-if [ -d "03-desktop.sb" ]; then
-	echo "adding 40-libinput.conf"
-	mkdir -p /tmp/sb/03-desktop.sb/etc/X11/xorg.conf.d
-		echo 'Section "InputClass"
+	#makes tap-to-touch which is missing in slax.
+	#If you don't like it you can always delete it later.
+	echo 'Section "InputClass"
         Identifier "libinput touchpad catchall"
         MatchIsTouchpad "on"
         MatchDevicePath "/dev/input/event*"
         Driver "libinput"
         Option "Tapping" "on"
-EndSection' > /tmp/sb/03-desktop.sb/etc/X11/xorg.conf.d/40-libinput.conf
+EndSection' > /tmp/sb/etc/X11/xorg.conf.d/40-libinput.conf
+
+	mksquashfs /tmp/sb "$DIR/01-lzo.sb" -comp lzo -b 1024K -always-use-fragments >/dev/null
+
+	#cleanup
+	rm -fr /tmp/sb
 fi
 
-echo
+#runtime bundles location, all mounted readonly directories
+cd /run/initramfs/memory/bundles
 
-#save bundles, should still be in /tmp/sb
-for X in *.sb;
+#cycle through directories of mounted bundles
+for X in *;
 do
+	#if file is present, we don't bother to repack it
+	if [ -f "$DIR/$X" ]; then
+		continue;
+	fi
+	
 	printf "Repacking: %s" "$X"
-	dir2sb_lzo "$X"
-	printf "\t%s  ->  %s\n"  `du -h "$DIR/slax/$X" | sed -E -e 's/[^a-zA-Z0-9].*//'`  `du -h "$X" | sed -E -e 's/[^a-zA-Z0-9].*//'`
+	
+	#Skips firmware, as you won't need it to be smaller
+	echo "$X" | grep "firmware" > /dev/null && echo "	Skipped" && continue;
+	
+	mksquashfs "$X" "$DIR/$X" -comp lzo -b 1024K -always-use-fragments >/dev/null
+
+	printf "\t%s  ->  %s\n"  `du -h "$DIR/slax/$X" | sed -E -e 's/[^a-zA-Z0-9].*//'`  `du -h "$DIR/$X" | sed -E -e 's/[^a-zA-Z0-9].*//'`
 done
 
 echo
-echo "Copying bundles back to device"
-#copy packages, then move them. This way in case there's an error you could do it manually after the fact.
-cp *.sb "$DIR"
-sync
-cd "$DIR"
-mv *.sb slax
 sync
 
 echo "Moving and rebooting"
@@ -98,8 +92,9 @@ do
 	sleep 1
 done
 
-#We don't bother with cleanup as it should be thrown away anyways.
-#rm -fr /tmp/sb
+cd "$DIR"
+mv *.sb slax
+sync
 
 #reboot, if done right the live files are LZO now
 shutdown -r now
